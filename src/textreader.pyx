@@ -74,20 +74,34 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
              allow_embedded_newline=True, datetime_fmt=None,
              usecols=None):
     """
+    readrows(f, dtype, delimiter=None, quote='"', comment='#',
+             allow_embedded_newline=True, datetime_fmt=None,
+             usecols=None)
+
+    Read a CSV (or similar) text file and return a numpy array.
+
     Parameters
     ----------
     f : file or str
         File or name of file to read.
     dtype : numpy dtype
-        Numpy dtype of the data to read.
+        Numpy dtype of the data to read.  This must be a structured
+        array.
         XXX Eventually this will be optional, and the code will figure
             it out automatically if the dtype is not given.
+    delimiter : str with length 1 or None, optional
+        The character that separates fields in the text file.  If
+        None, fields are separates by white space.
+        Default is None.
     quote : str with length of 1, optional
+        The quote character used for quoted fields.
         Default is '"'.
     comment : str with length of 1, optional
+        The character that marks the beginning of a comment.  All text
+        from this character to the end of the line is ignored.
         Default is '#'
     allow_embedded_newline : bool, optional
-        Default is True
+        Default is True.
     datetime_fmt : str or None, optional
         If not None, this must be a string that can be used by
         strptime to parse a datetime string.
@@ -95,6 +109,16 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         If given, this is the set of column indices (starting
         at 0) of the columns to keep.  The data type given in
         `dtype` must match the columns specified with `usecols`.
+
+    Notes
+    -----
+    When a field contains no data, the following are assigned::
+
+       float:    nan
+       int:      0
+       string:   '' (empty string)
+       datetime: 0
+
     """
     cdef numpy.ndarray a
     cdef numpy.ndarray usecols_array
