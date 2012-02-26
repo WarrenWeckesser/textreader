@@ -1,0 +1,10 @@
+
+The textreader module has the function readrows, which reads CSV (and similar)
+text files into a numpy array.
+
+This is experimental, unreleased software.  Use at your own risk.
+
+To install, you will need cython.  In the top directory, run
+$ python setup.py install
+
+The directory examples/ contains, well, examples.
