@@ -1,19 +1,26 @@
+
+import sys
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
 
 import numpy
 
-ext = Extension("textreader",
-                 [
-                  "src/textreader.pyx",
-                  "src/rows.c",
-                  "src/tokenize.c",
-                  "src/fields.c",
-                  "src/file_buffer.c",
-                  "src/conversions.c",
-                  ],
-    include_dirs = ['src', numpy.get_include()])
+src_files = [
+        "src/textreader.pyx",
+        "src/rows.c",
+        "src/tokenize.c",
+        "src/fields.c",
+        "src/conversions.c",
+        ]
+
+if sys.platform == 'darwin' or sys.platform.startswith('linux'):
+    src_files.append('src/file_buffer_mm.c')
+else:
+    src_files.append('src/file_buffer.c')
+
+ext = Extension("textreader", src_files,
+                include_dirs = ['src', numpy.get_include()])
 
 setup(
     name='textreader',

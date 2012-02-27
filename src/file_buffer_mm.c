@@ -1,12 +1,11 @@
 
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stdint.h>
 
 #include "file_buffer.h"
 
-#define DEFAULT_BUFFER_SIZE 16777216
 
 /*
  *  file_buffer *new_file_buffer(FILE *f)
@@ -17,18 +16,35 @@
 
 file_buffer *new_file_buffer(FILE *f)
 {
+    struct stat buf;
+    int fd;
     file_buffer *fb;
+    long current_pos;
+    off_t filesize;
+
+    fd = fileno(f);
+    fstat(fd, &buf);
+    filesize = buf.st_size;  /* XXX This might be 32 bits. */
+    current_pos = ftell(f);
 
     fb = (file_buffer *) malloc(sizeof(file_buffer));
     if (fb != NULL) {
         fb->file = f;
-        fb->bookmark = NULL;
+        fb->fileno = fd;
+        fb->size = (long long int) filesize;
         fb->line_number = 0;  // XXX Maybe more natural to start at 1?
-        fb->current_pos = 0;
-        fb->last_pos = 0;
+        fb->current_pos = current_pos;
+        fb->last_pos = (long long int) filesize;
         fb->reached_eof = 0;
-        fb->buffer_size = DEFAULT_BUFFER_SIZE;
-        fb->buffer = malloc(fb->buffer_size);
+        fb->buffer_size = (long long int) filesize; // ?
+        fb->buffer = mmap(NULL, filesize, PROT_READ, MAP_FILE|MAP_SHARED, fd, 0);
+        if (fb->buffer == NULL) {
+            fprintf(stderr, "uh oh...\n");
+        }
+        else {
+            fprintf(stderr, "Created mmap\n");
+        }
+        fb->bookmark = NULL;
     }
     else {
         /*  XXX Temporary print statement. */
@@ -40,7 +56,7 @@ file_buffer *new_file_buffer(FILE *f)
 void del_file_buffer(file_buffer *fb)
 {
     free(fb->bookmark);
-    free(fb->buffer);
+    munmap(fb->buffer, fb->buffer_size);
     free(fb);
 }
 
@@ -63,8 +79,8 @@ void set_bookmark(file_buffer *fb)
     if (fb->bookmark) {
         free(fb->bookmark);
     }
-    fb->bookmark = (fpos_t *) malloc(sizeof(fpos_t));
-    fgetpos(fb->file, fb->bookmark);
+    fb->bookmark = (void *) malloc(sizeof(long long int));
+    *(long long int *)(fb->bookmark) = fb->current_pos;
 }
 
 
@@ -74,7 +90,7 @@ void goto_bookmark(file_buffer *fb)
         fprintf(stderr, "error: bookmark has not been set.\n");
     }
     else {
-        fsetpos(fb->file, fb->bookmark);
+        fb->current_pos = *(long long int *)(fb->bookmark);
     }
 }
 
@@ -84,30 +100,12 @@ void goto_bookmark(file_buffer *fb)
  *
  *  Get data from the file into the buffer.
  *
+ *  XXX This function needs some help--it can fall through without hitting a
+ *      return statement.
  */
 
 int _fb_load(file_buffer *fb)
 {
-    char *buffer = fb->buffer;
-
-    if (!fb->reached_eof && (fb->current_pos == fb->last_pos || fb->current_pos+1 == fb->last_pos)) {
-        size_t num_read;
-        /* k will be either 0 or 1. */
-        int k = fb->last_pos - fb->current_pos;
-        if (k) {
-            buffer[0] = buffer[fb->current_pos];
-        }
-        
-        num_read = fread(&(buffer[k]), 1, fb->buffer_size - k, fb->file);
-
-        fb->current_pos = 0;
-        fb->last_pos = num_read + k;
-        if (num_read < fb->buffer_size - k)
-            if (feof(fb->file))
-                fb->reached_eof = 1;
-            else
-                return FB_ERROR;
-    }
     return 0;
 }
 
@@ -127,19 +125,20 @@ int _fb_load(file_buffer *fb)
 int fetch(file_buffer *fb)
 {
     char c;
-    char *buffer = fb->buffer;
     
-    _fb_load(fb);
+    //printf("fetch: current_pos = %lld\n", fb->current_pos);
 
-    if (fb->current_pos == fb->last_pos)
+    if (fb->current_pos == fb->last_pos) {
+        fb->reached_eof = 1;
         return FB_EOF;
+    }
 
-    if (fb->current_pos + 1 < fb->last_pos && buffer[fb->current_pos] == '\r'
-          && buffer[fb->current_pos + 1] == '\n') {
+    if (fb->current_pos + 1 < fb->last_pos && fb->buffer[fb->current_pos] == '\r'
+          && fb->buffer[fb->current_pos + 1] == '\n') {
         c = '\n';
         fb->current_pos += 2;
     } else {
-        c = buffer[fb->current_pos];
+        c = fb->buffer[fb->current_pos];
         fb->current_pos += 1;
     }
     if (c == '\n') {
@@ -157,7 +156,6 @@ int fetch(file_buffer *fb)
 
 int next(file_buffer *fb)
 {
-    _fb_load(fb);
     if (fb->current_pos+1 >= fb->last_pos)
         return FB_EOF;
     else

@@ -33,12 +33,13 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
     int num_fields;
     char **result;
     char word_buffer[WORD_BUFFER_SIZE];
-    fpos_t pos;
 
     /* Remember the current file pointer position. */
-    fgetpos(f, &pos);
+
 
     fb = new_file_buffer(f);
+    set_bookmark(fb);
+ 
     row_count = 0;
     while ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
                               delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
@@ -54,9 +55,10 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
         free(result);
         ++row_count;
     }
-    free(fb);
-    /* Put the file pointer back where it was. */
-    fsetpos(f, &pos);
+
+    goto_bookmark(fb);
+    del_file_buffer(fb);
+
     return row_count;
 }
 
@@ -169,6 +171,7 @@ void *read_rows(FILE *f, int nrows, char *fmt,
         free(result);
         ++row_count;
     }
-    free(fb);
+
+    del_file_buffer(fb);
     return (void *) data_array;
 }
