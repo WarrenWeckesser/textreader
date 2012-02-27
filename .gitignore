@@ -7,3 +7,7 @@
 *~
 /build
 /dist
+src/textreader.c
+examples/data/big.csv
+examples/data/time_samples.csv
+
