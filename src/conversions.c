@@ -8,17 +8,23 @@
 #include "constants.h"
 
 
-int to_double(char *item, double *p_value, char sci)
+int to_double(char *item, double *p_value, char sci, char decimal)
 {
     char *p_end;
     char tmp[FIELD_BUFFER_SIZE];
     char *p, *q;
 
-    if (sci == 'D') {
-        /* Copy item to tmp, changing 'd' or 'D' to 'e'. */
+    if (sci == 'D' || decimal != '.') {
+        /*
+         *  Copy item to tmp, changing 'd' or 'D' to 'e',
+         *  and decimal to '.'.
+         */
         for (p = tmp, q = item; *q != '\0'; ++p, ++q) {
-            if (*q == 'd' || *q == 'D') {
+            if ((sci == 'D') && (*q == 'd' || *q == 'D')) {
                 *p = 'e';
+            }
+            else if ((decimal != '.') && (*q == decimal)) {
+                *p = '.';
             }
             else {
                 *p = *q;
