@@ -14,7 +14,7 @@ cdef extern from "fileobject.h":
 cdef extern from "rows.h":
     int count_rows(FILE *f, char delimiter, char quote, char comment,
                    int allow_embedded_newline)
-    void *read_rows(FILE *f, int nrows, char *fmt,
+    void *read_rows(FILE *f, int *nrows, char *fmt,
                     char delimiter, char quote, char comment,
                     int allow_embedded_newline,
                     char *datetime_fmt,
@@ -72,11 +72,11 @@ def dtype2fmt(dtype):
 
 def readrows(f, dtype, delimiter=None, quote='"', comment='#',
              allow_embedded_newline=True, datetime_fmt=None,
-             usecols=None):
+             usecols=None, numrows=None):
     """
     readrows(f, dtype, delimiter=None, quote='"', comment='#',
              allow_embedded_newline=True, datetime_fmt=None,
-             usecols=None)
+             usecols=None, numrows=None)
 
     Read a CSV (or similar) text file and return a numpy array.
 
@@ -109,6 +109,12 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         If given, this is the set of column indices (starting
         at 0) of the columns to keep.  The data type given in
         `dtype` must match the columns specified with `usecols`.
+    numrows : int or None, optional
+        If given, at most this number of rows of data will be read.
+        In this case, the first pass throught the file that count
+        the number of rows is skipped.  Instead an array of length
+        `numrows` is created, and is filled in with data from the
+        file.
 
     Notes
     -----
@@ -124,6 +130,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     cdef numpy.ndarray usecols_array
     cdef char *dt_fmt
     cdef int opened_here = False
+    cdef int nrows
 
     if isinstance(f, basestring):
         opened_here = True
@@ -140,24 +147,32 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if delimiter is None:
         delimiter = '\x00'
 
-    nrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
+    if numrows is None:
+        numrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
+        if numrows == -1:
+            raise RuntimeError("An error occurred while counting the number of rows in the file.")
 
     # XXX Remove this print eventually.  For now, it helps to show
     # how long countrows() takes.
-    print "readrows: nrows =", nrows
+    print "readrows: numrows =", numrows
 
     if usecols is None:
         usecols_array = numpy.arange(len(dtype.names), dtype=int)
     else:
         usecols_array = numpy.asarray(usecols, dtype=int)
 
-    a = numpy.empty((nrows,), dtype=dtype)
+    a = numpy.empty((numrows,), dtype=dtype)
 
-    result = read_rows(PyFile_AsFile(f), nrows, fmt, ord(delimiter[0]), ord(quote[0]),
+    nrows = numrows
+    result = read_rows(PyFile_AsFile(f), &nrows, fmt, ord(delimiter[0]), ord(quote[0]),
                          ord(comment[0]), allow_embedded_newline, dt_fmt,
                          <int *>usecols_array.data, usecols_array.size, a.data)
 
     if opened_here:
         f.close()
+
+    print "numrows =", numrows, "  nrows =", nrows
+    if nrows < numrows:
+        a = a[:nrows]
 
     return a

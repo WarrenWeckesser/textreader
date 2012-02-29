@@ -3,26 +3,36 @@
 #define FB_EOF   -1
 #define FB_ERROR -2
 
-typedef struct _file_buffer {
+#define RESTORE_NOT     0
+#define RESTORE_INITIAL 1
+#define RESTORE_FINAL   2
 
-    FILE *file;
-    int fileno;
-    long long int size;  /* Size of the file, in bytes. */
-    void *bookmark;
+/*
+ *  This is the API used to access a file.
+ *  All the code in rows.c and tokenize.c accesses the
+ *  file using these four functions.
+ *
+ *  The pointer returned by new_file_buffer() is intentionally
+ *  opaque.  An implementation of this interface may define it
+ *  however it finds necessary.
+ *
+ */
 
-    int line_number;
-    long long int current_pos;
-    long long int last_pos;
-    int reached_eof;
-    long long int buffer_size;
-    char *buffer;
+void *new_file_buffer(FILE *f, int buffer_size);
 
-} file_buffer;
+/*
+ * restore:
+ *  RESTORE_NOT     (0):
+ *      Free memory, but leave the file position wherever it
+ *      happend to be.
+ *  RESTORE_INITIAL (1):
+ *      Restore the file position to the location at which
+ *      the file_buffer was created.
+ *  RESTORE_FINAL   (2):
+ *      Put the file position at the next byte after the
+ *      data read from the file_buffer.
+ */
+void del_file_buffer(void *fb, int restore);
 
-file_buffer *new_file_buffer(FILE *f);
-void del_file_buffer(file_buffer *fb);
-void fb_dump(file_buffer *fb);
-void set_bookmark(file_buffer *fb);
-void goto_bookmark(file_buffer *fb);
-int fetch(file_buffer *fb);
-int next(file_buffer *fb);
+int fetch(void *fb);
+int next(void *fb);

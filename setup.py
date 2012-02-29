@@ -14,7 +14,7 @@ src_files = [
         "src/conversions.c",
         ]
 
-if sys.platform == 'darwin' or sys.platform.startswith('linux'):
+if False and (sys.platform == 'darwin' or sys.platform.startswith('linux')):
     src_files.append('src/file_buffer_mm.c')
 else:
     src_files.append('src/file_buffer.c')

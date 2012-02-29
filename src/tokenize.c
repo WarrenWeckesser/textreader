@@ -21,7 +21,7 @@
  *
  */
 
-static char **tokenize_sep(file_buffer *fb, char *word_buffer, int word_buffer_size,
+static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
                            char sep_char, char quote_char, char comment_char,
                            int *p_num_fields, int allow_embedded_newline)
 {
@@ -134,7 +134,7 @@ static char **tokenize_sep(file_buffer *fb, char *word_buffer, int word_buffer_s
 // XXX double check the use of 'strict_quoting'
 //
 
-static char **tokenize_ws(file_buffer *fb, char *word_buffer, int word_buffer_size,
+static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
                           char quote_char, char comment_char,
                           int *p_num_fields,
                           int allow_embedded_newline,
@@ -260,7 +260,7 @@ static char **tokenize_ws(file_buffer *fb, char *word_buffer, int word_buffer_si
 }
 
 
-char **tokenize(file_buffer *fb, char *word_buffer, int word_buffer_size,
+char **tokenize(void *fb, char *word_buffer, int word_buffer_size,
                 char sep_char, char quote_char, char comment_char,
                 int *p_num_fields, int allow_embedded_newline)
 {

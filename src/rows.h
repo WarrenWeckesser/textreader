@@ -2,7 +2,7 @@
 
 int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline);
 
-void *read_rows(FILE *f, int nrows, char *fmt,
+void *read_rows(FILE *f, int *nrows, char *fmt,
                 char delimiter, char quote, char comment,
                 int allow_embedded_newline,
                 char *datetime_fmt,

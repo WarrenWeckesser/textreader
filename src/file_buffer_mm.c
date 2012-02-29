@@ -3,15 +3,48 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "file_buffer.h"
+
+#ifdef __APPLE__
+#define fseeko64 fseek
+#define ftello64 ftell
+#define off64_t off_t
+#endif
+
+typedef struct _file_buffer {
+
+    FILE *file;
+
+    /* Size of the file, in bytes. */
+    off64_t size;
+
+    /* file position when the file_buffer was created. */
+    off64_t initial_file_pos;
+
+    int line_number;
+
+    int fileno;
+    off64_t current_pos;
+    off64_t last_pos;
+    char *memmap;
+
+} file_buffer;
+
+
+/*
+ * XXX Currently the entire file is memory mapped.  It might be better
+ *     to map blocks of the file sequentially.  Or, as least advise the OS
+ *     occasionally that pages that we're finished with can be released.
+ */
 
 
 /*
  *  file_buffer *new_file_buffer(FILE *f)
  *
  *  Allocate a new file_buffer.
- *  Returns NULL if the memory allocation fails.
+ *  Returns NULL if the memory allocation fails or if the call to mmap fails.
  */
 
 file_buffer *new_file_buffer(FILE *f)
@@ -19,96 +52,64 @@ file_buffer *new_file_buffer(FILE *f)
     struct stat buf;
     int fd;
     file_buffer *fb;
-    long current_pos;
-    off_t filesize;
+    off64_t current_pos;
+    off64_t filesize;
 
     fd = fileno(f);
-    fstat(fd, &buf);
+    if (fstat(fd, &buf) == -1) {
+        fprintf(stderr, "new_file_buffer: fstat() failed. errno =%d\n", errno);
+        return NULL;
+    }
     filesize = buf.st_size;  /* XXX This might be 32 bits. */
-    current_pos = ftell(f);
 
     fb = (file_buffer *) malloc(sizeof(file_buffer));
-    if (fb != NULL) {
-        fb->file = f;
-        fb->fileno = fd;
-        fb->size = (long long int) filesize;
-        fb->line_number = 0;  // XXX Maybe more natural to start at 1?
-        fb->current_pos = current_pos;
-        fb->last_pos = (long long int) filesize;
-        fb->reached_eof = 0;
-        fb->buffer_size = (long long int) filesize; // ?
-        fb->buffer = mmap(NULL, filesize, PROT_READ, MAP_FILE|MAP_SHARED, fd, 0);
-        if (fb->buffer == NULL) {
-            fprintf(stderr, "uh oh...\n");
-        }
-        else {
-            fprintf(stderr, "Created mmap\n");
-        }
-        fb->bookmark = NULL;
+    if (fb == NULL) {
+        /* XXX Eventually remove this print statement. */
+        fprintf(stderr, "new_file_buffer: malloc() failed.\n");
+        return NULL;
     }
-    else {
-        /*  XXX Temporary print statement. */
-        printf("new_file_buffer: out of memory\n");
+    fb->file = f;
+    fb->size = (off64_t) filesize;
+    fb->line_number = 0;  // XXX Maybe more natural to start at 1?
+
+    fb->fileno = fd;
+    fb->current_pos = ftello64(f);
+    fb->last_pos = (off64_t) filesize;
+
+    fb->memmap = mmap(NULL, filesize, PROT_READ, MAP_FILE|MAP_SHARED, fd, 0);
+    if (cust->memmap == NULL) {
+        /* XXX Eventually remove this print statement. */
+        fprintf(stderr, "new_file_buffer: mmap() failed.\n");
+        free(cust);
+        free(fb);
+        fb = NULL;
     }
+
+    fb->custom = (void *) cust;
+
     return fb;
 }
 
-void del_file_buffer(file_buffer *fb)
+
+void del_file_buffer(file_buffer *fb, int restore)
 {
-    free(fb->bookmark);
-    munmap(fb->buffer, fb->buffer_size);
+    custom *cust = (custom *) fb->custom;
+
+
+    munmap(cust->memmap, fb->size);
+
+    if (restore == RESTORE_INITIAL) {
+        /* XXX Is this necessary?  Has the file position moved? */
+        /* No, it should not have moved... */
+        //fseeko64(fb->file, fb->initial_file_pos, SEEK_SET);
+    }
+    else if (restore == RESTORE_FINAL) {
+        printf("del_file_buffer: current_pos = %lld\n", cust->current_pos);
+        fseeko64(fb->file, cust->current_pos, SEEK_SET);
+    }
+    free(cust);
     free(fb);
 }
-
-/*
- *  Print the file buffer fields.
- */
-
-void fb_dump(file_buffer *fb)
-{
-    printf("fb->file        = %p\n", (void *) fb->file);
-    printf("fb->line_number = %d\n", fb->line_number);
-    printf("fb->current_pos = %lld\n", fb->current_pos);
-    printf("fb->last_pos    = %lld\n", fb->last_pos);
-    printf("fb->reached_eof = %d\n", fb->reached_eof);
-}
-
-
-void set_bookmark(file_buffer *fb)
-{
-    if (fb->bookmark) {
-        free(fb->bookmark);
-    }
-    fb->bookmark = (void *) malloc(sizeof(long long int));
-    *(long long int *)(fb->bookmark) = fb->current_pos;
-}
-
-
-void goto_bookmark(file_buffer *fb)
-{
-    if (fb->bookmark == NULL) {
-        fprintf(stderr, "error: bookmark has not been set.\n");
-    }
-    else {
-        fb->current_pos = *(long long int *)(fb->bookmark);
-    }
-}
-
-
-/*
- *  int _fb_load(file_buffer *fb)
- *
- *  Get data from the file into the buffer.
- *
- *  XXX This function needs some help--it can fall through without hitting a
- *      return statement.
- */
-
-int _fb_load(file_buffer *fb)
-{
-    return 0;
-}
-
 
 /*
  *  int fetch(file_buffer *fb)
@@ -125,21 +126,19 @@ int _fb_load(file_buffer *fb)
 int fetch(file_buffer *fb)
 {
     char c;
+    custom *cust = (custom *) fb->custom;
     
-    //printf("fetch: current_pos = %lld\n", fb->current_pos);
-
-    if (fb->current_pos == fb->last_pos) {
-        fb->reached_eof = 1;
+    if (cust->current_pos == cust->last_pos) {
         return FB_EOF;
     }
 
-    if (fb->current_pos + 1 < fb->last_pos && fb->buffer[fb->current_pos] == '\r'
-          && fb->buffer[fb->current_pos + 1] == '\n') {
+    if (cust->current_pos + 1 < cust->last_pos && cust->memmap[cust->current_pos] == '\r'
+          && cust->memmap[cust->current_pos + 1] == '\n') {
         c = '\n';
-        fb->current_pos += 2;
+        cust->current_pos += 2;
     } else {
-        c = fb->buffer[fb->current_pos];
-        fb->current_pos += 1;
+        c = cust->memmap[cust->current_pos];
+        cust->current_pos += 1;
     }
     if (c == '\n') {
         fb->line_number++;
@@ -156,10 +155,12 @@ int fetch(file_buffer *fb)
 
 int next(file_buffer *fb)
 {
-    if (fb->current_pos+1 >= fb->last_pos)
+    custom *cust = (custom *) fb->custom;
+
+    if (cust->current_pos + 1 >= cust->last_pos)
         return FB_EOF;
     else
-        return fb->buffer[fb->current_pos];
+        return cust->memmap[cust->current_pos];
 }
 
 

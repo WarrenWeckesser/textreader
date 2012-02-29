@@ -14,6 +14,12 @@
 #include "fields.h"
 
 /*
+ *  XXX Might want to couple count_rows() with read_rows() to avoid duplication
+ *      of some file I/O.
+ */
+
+
+/*
  *  WORD_BUFFER_SIZE determines the maximum amount of non-delimiter
  *  text in a row.
  */
@@ -24,53 +30,52 @@
  *  int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline)
  *
  *  Negative return values indicate an error.
+ *
+ *  XXX Need a mechanism to pass more error information back to the caller.
  */
 
 int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline)
 {
-    file_buffer *fb;
+    void *fb;
     int row_count;
     int num_fields;
     char **result;
     char word_buffer[WORD_BUFFER_SIZE];
 
-    /* Remember the current file pointer position. */
-
-
-    fb = new_file_buffer(f);
-    set_bookmark(fb);
+    fb = new_file_buffer(f, -1);
+    if (fb == NULL) {
+        return -1;
+    }
  
     row_count = 0;
     while ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
                               delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
-        // --- temporary, just for a timing test ---
-        /*
-        int k;
-        double x;
-        for (k = 0; k < num_fields; ++k) {
-            to_double(result[k], &x);
+        if (result == NULL) {
+            row_count = -1;
+            break;
         }
-        */
-        // ---
         free(result);
         ++row_count;
     }
 
-    goto_bookmark(fb);
-    del_file_buffer(fb);
+    del_file_buffer(fb, RESTORE_INITIAL);
 
     return row_count;
 }
 
 
-void *read_rows(FILE *f, int nrows, char *fmt,
+/*
+ *  XXX Handle errors in any of the functions called by read_rows().
+ */
+
+void *read_rows(FILE *f, int *nrows, char *fmt,
                 char delimiter, char quote, char comment,
                 int allow_embedded_newline,
                 char *datetime_fmt,
                 int *usecols, int num_usecols,
                 void *data_array)
 {
-    file_buffer *fb;
+    void *fb;
     char *data_ptr;
     int num_fields;
     char **result;
@@ -85,7 +90,7 @@ void *read_rows(FILE *f, int nrows, char *fmt,
         datetime_fmt = "%Y-%m-%d %H:%M:%S";
     }
 
-    size = nrows * calc_size(fmt, &fmt_nfields);
+    size = (*nrows) * calc_size(fmt, &fmt_nfields);
 
     ftypes = enumerate_fields(fmt);
 
@@ -97,13 +102,15 @@ void *read_rows(FILE *f, int nrows, char *fmt,
     printf("-----\n");
     */
 
-    if (data_array == NULL)
+    if (data_array == NULL) {
+        /* XXX The case where data_array is allocated here is untested. */
         data_array = malloc(size);
+    }
     data_ptr = data_array;
 
-    fb = new_file_buffer(f);
+    fb = new_file_buffer(f, -1);
     row_count = 0;
-    while ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+    while ((row_count < *nrows) && (result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
                               delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
         int j, k;
         int item_type;
@@ -157,7 +164,6 @@ void *read_rows(FILE *f, int nrows, char *fmt,
                     }
                     else {
                         *(uint64_t *) data_ptr = (long long) t * 1000000L;
-                        //printf("converted '%s' -> %lld\n", result[k], *(uint64_t *) data_ptr);
                     }
                 }
                 data_ptr += 8;
@@ -172,6 +178,8 @@ void *read_rows(FILE *f, int nrows, char *fmt,
         ++row_count;
     }
 
-    del_file_buffer(fb);
+    del_file_buffer(fb, RESTORE_FINAL);
+    *nrows = row_count;
+
     return (void *) data_array;
 }
