@@ -152,6 +152,8 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
 
     fmt = dtype2fmt(dtype)
 
+    print "readrows: fmt =", fmt
+
     if datetime_fmt is None:
         dt_fmt = ''
     else:
@@ -176,8 +178,12 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     # how long countrows() takes.
     print "readrows: numrows =", numrows
 
+    # XXX Hack
+    num_fields = sum(c not in "0123456789" for c in fmt)
+    print "readrows: num_fields =", num_fields
+
     if usecols is None:
-        usecols_array = numpy.arange(len(fmt), dtype=int)
+        usecols_array = numpy.arange(num_fields, dtype=int)
     else:
         usecols_array = numpy.asarray(usecols, dtype=int)
 
