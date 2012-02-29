@@ -20,6 +20,7 @@ cdef extern from "rows.h":
                     int allow_embedded_newline,
                     char *datetime_fmt,
                     void *usecols, int num_usecols,
+                    int skiprows,
                     void *data_array)
 
 
@@ -74,12 +75,12 @@ def dtype2fmt(dtype):
 def readrows(f, dtype, delimiter=None, quote='"', comment='#',
              sci='E', decimal='.',
              allow_embedded_newline=True, datetime_fmt=None,
-             usecols=None, numrows=None):
+             usecols=None, skiprows=None, numrows=None):
     """
     readrows(f, dtype, delimiter=None, quote='"', comment='#',
              sci='E', decimal='.',
              allow_embedded_newline=True, datetime_fmt=None,
-             usecols=None, numrows=None)
+             usecols=None, skiprows=None, numrows=None)
 
     Read a CSV (or similar) text file and return a numpy array.
 
@@ -122,9 +123,13 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         If given, this is the set of column indices (starting
         at 0) of the columns to keep.  The data type given in
         `dtype` must match the columns specified with `usecols`.
+    skiprows : int or None, optional
+        Numer of rows to skip before beginning to read rows of data.
+        Default is None (don't skip any rows).  
     numrows : int or None, optional
-        If given, at most this number of rows of data will be read.
-        In this case, the first pass throught the file that count
+        If given, at most this number of rows of data will be read
+        (not including `skiprows`).
+        In this case, the first pass throught the file that counts
         the number of rows is skipped.  Instead an array of length
         `numrows` is created, and is filled in with data from the
         file.
@@ -169,10 +174,15 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if len(decimal) != 1:
         raise ValueError("'%s' is not a valid value for decimal." % decimal)
 
+    if skiprows is None:
+        skiprows = 0
+
     if numrows is None:
         numrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
         if numrows == -1:
             raise RuntimeError("An error occurred while counting the number of rows in the file.")
+        # XXX What if the following makes numrows negative?
+        numrows -= skiprows
 
     # XXX Remove this print eventually.  For now, it helps to show
     # how long countrows() takes.
@@ -192,7 +202,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     nrows = numrows
     result = read_rows(PyFile_AsFile(f), &nrows, fmt, ord(delimiter[0]), ord(quote[0]),
                          ord(comment[0]), ord(sci[0]), ord(decimal[0]), allow_embedded_newline, dt_fmt,
-                         <int *>usecols_array.data, usecols_array.size, a.data)
+                         <int *>usecols_array.data, usecols_array.size, skiprows, a.data)
 
     if opened_here:
         f.close()

@@ -1,3 +1,4 @@
+* Unit tests
 * Autodetect dtype
 * Handle missing values
 * Allow the datetime format to be specified by the user (pass in a format string for use with strptime?)

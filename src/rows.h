@@ -8,4 +8,5 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
                 int allow_embedded_newline,
                 char *datetime_fmt,
                 int *usecols, int num_usecols,
+                int skiprows,
                 void *data_array);

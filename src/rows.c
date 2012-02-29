@@ -74,6 +74,7 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
                 int allow_embedded_newline,
                 char *datetime_fmt,
                 int *usecols, int num_usecols,
+                int skiprows,
                 void *data_array)
 {
     void *fb;
@@ -110,6 +111,17 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
     data_ptr = data_array;
 
     fb = new_file_buffer(f, -1);
+
+    /* XXX Check interaction of skiprows with comments. */
+    while ((skiprows > 0) && ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+                              delimiter, quote, comment, &num_fields, TRUE)) != NULL)) {
+        if (result == NULL) {
+            break;
+        }
+        free(result);
+        --skiprows;
+    }
+
     row_count = 0;
     while ((row_count < *nrows) && (result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
                               delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
