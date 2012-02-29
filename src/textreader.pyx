@@ -196,6 +196,8 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         usecols_array = numpy.arange(num_fields, dtype=int)
     else:
         usecols_array = numpy.asarray(usecols, dtype=int)
+        if usecols_array.size > num_fields:
+            raise ValueError("Length of the 'usecols' sequence exceeds the number of fields in the dtype.")
 
     a = numpy.empty((numrows,), dtype=dtype)
 
