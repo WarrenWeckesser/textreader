@@ -70,6 +70,7 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
 
 void *read_rows(FILE *f, int *nrows, char *fmt,
                 char delimiter, char quote, char comment,
+                char sci,
                 int allow_embedded_newline,
                 char *datetime_fmt,
                 int *usecols, int num_usecols,
@@ -138,7 +139,7 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
             else if (ftypes[j].typechar == 'f' || ftypes[j].typechar == 'd') {
                 // Convert to float.
                 double x;
-                if ((strlen(result[k]) == 0) || !to_double(result[k], &x)) {
+                if ((strlen(result[k]) == 0) || !to_double(result[k], &x, sci)) {
                     // XXX  Find the canonical platform-independent method to assign nan.
                     x = 0.0 / 0.0;
                 }

@@ -16,6 +16,7 @@ cdef extern from "rows.h":
                    int allow_embedded_newline)
     void *read_rows(FILE *f, int *nrows, char *fmt,
                     char delimiter, char quote, char comment,
+                    char sci,
                     int allow_embedded_newline,
                     char *datetime_fmt,
                     void *usecols, int num_usecols,
@@ -71,10 +72,12 @@ def dtype2fmt(dtype):
 
 
 def readrows(f, dtype, delimiter=None, quote='"', comment='#',
+             sci='E',
              allow_embedded_newline=True, datetime_fmt=None,
              usecols=None, numrows=None):
     """
     readrows(f, dtype, delimiter=None, quote='"', comment='#',
+             sci='E',
              allow_embedded_newline=True, datetime_fmt=None,
              usecols=None, numrows=None)
 
@@ -100,6 +103,10 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         The character that marks the beginning of a comment.  All text
         from this character to the end of the line is ignored.
         Default is '#'
+    sci : str with length 1, optional
+        If this string is 'd' or 'D', the reader will expect numbers
+        expressed in scientific notation to use the letter 'd' or 'D'
+        before the exponent, instead of the usual 'e' or 'E'.
     allow_embedded_newline : bool, optional
         Default is True.
     datetime_fmt : str or None, optional
@@ -147,6 +154,10 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if delimiter is None:
         delimiter = '\x00'
 
+    sci = sci.upper()
+    if sci != 'E' and sci != 'D':
+        raise ValueError("sci must be 'D' or 'E'.")
+
     if numrows is None:
         numrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
         if numrows == -1:
@@ -165,7 +176,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
 
     nrows = numrows
     result = read_rows(PyFile_AsFile(f), &nrows, fmt, ord(delimiter[0]), ord(quote[0]),
-                         ord(comment[0]), allow_embedded_newline, dt_fmt,
+                         ord(comment[0]), ord(sci[0]), allow_embedded_newline, dt_fmt,
                          <int *>usecols_array.data, usecols_array.size, a.data)
 
     if opened_here:

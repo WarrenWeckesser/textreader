@@ -1,7 +1,7 @@
 * Autodetect dtype
 * Handle missing values
 * Allow the datetime format to be specified by the user (pass in a format string for use with strptime?)
-* Add a 'maxrows' option.  This is the maximum number of rows in the array that is returned.
-  When this value is given, the code can skip the precount, and simply allocate an array
-  with this many rows.  If the end of file is reached before this number of rows is read, a view
-  of the preallocated array is returned
+* Add a 'skiprows' option.
+* Handle dtypes of structured arrays properly.  Currently it works for simple cases, but it will
+  probably break if given a complicated dtype.
+* Handle and report parsing errors.
