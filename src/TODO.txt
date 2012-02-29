@@ -1,8 +1,15 @@
 * Unit tests
 * Autodetect dtype
-* Handle missing values
+* Handle missing values.  Currently a missing field is replaced with a value that depends on the
+  data type: float -> nan, int -> 0, string -> '', datetime -> 0.
 * Allow the datetime format to be specified by the user (pass in a format string for use with strptime?)
-* Add a 'skiprows' option.
+  This is started, but it needs review and tests.
 * Handle dtypes of structured arrays properly.  Currently it works for simple cases, but it will
   probably break if given a complicated dtype.
-* Handle and report parsing errors.
+* Handle and report parsing errors (e.g. "Invalid floating point value '12..34' in field 3 on line 99").
+  Include a check that the number of fields read from the file matches the expected number of fields.
+* Add an 'enum' replacement.  This will be a relatively simple replacement scheme, in which a
+  dictionary mapping strings to strings is provided.  This can be implemented in C, so it
+  should be reasonably fast.
+* Add callback converters.  This will allow the user to provide their own python function
+  to do conversion.

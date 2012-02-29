@@ -125,6 +125,12 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
     row_count = 0;
     while ((row_count < *nrows) && (result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
                               delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
+        /*
+         * XXX Need to check that num_fields has the expected value, and that
+         *     each col in usecols is valid.  We should allow these values to
+         *     be negative, so -1 means the last column, etc, i.e.
+         *         -num_fields <= col < num_fields
+         */
         int j, k;
         int item_type;
         double x;
