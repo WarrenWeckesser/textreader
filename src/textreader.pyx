@@ -157,7 +157,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     print "readrows: numrows =", numrows
 
     if usecols is None:
-        usecols_array = numpy.arange(len(dtype.names), dtype=int)
+        usecols_array = numpy.arange(len(fmt), dtype=int)
     else:
         usecols_array = numpy.asarray(usecols, dtype=int)
 
