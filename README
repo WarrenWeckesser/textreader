@@ -28,10 +28,6 @@ Features
   If fewer rows than specified are found in the file, the array that is
   returned is a view of the originally allocated array. 
 
-  Untested, but planned: If the file has more rows than specified, the
-  file pointer will be left at the start of the first unread row, and
-  readrows() may be called again to read more of the data.
-
 * Dates are parsed into datetime64 values (requires numpy version 1.6.1).
   The format of the date is specified with a string using the conventions
   of the C library function strptime():
