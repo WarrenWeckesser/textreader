@@ -5,9 +5,9 @@
 *.lo
 *.la
 *~
-/build
-/dist
+python/build
+python/dist
 src/textreader.c
-examples/data/big.csv
-examples/data/time_samples.csv
+python/examples/data/big.csv
+python/examples/data/time_samples.csv
 
