@@ -34,5 +34,7 @@ void *new_file_buffer(FILE *f, int buffer_size);
  */
 void del_file_buffer(void *fb, int restore);
 
+int line_number(void *fb);
+
 int fetch(void *fb);
 int next(void *fb);

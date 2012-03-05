@@ -8,3 +8,53 @@ To install, you will need cython.  In the top directory, run
 $ python setup.py install
 
 The directory examples/ contains, well, examples.
+
+Tested with numpy 1.4.1 and 1.6.1.
+
+Features
+--------
+
+* Fields may be delimited with spaces or with a given delimiter character.
+
+* Fields may be quoted with a given quote character.
+
+* The maximum number of rows to read can be specified.  Normally readrows()
+  reads the file twice; the first pass just counts the number of rows
+  in the file.  This allows the function to allocate an array that is
+  exactly the size of the data to be read.  If the number of rows is
+  specified by the user, the first pass is skipped, and the memory for
+  the array is allocated based on the specified number of rows.
+
+  If fewer rows than specified are found in the file, the array that is
+  returned is a view of the originally allocated array. 
+
+  Untested, but planned: If the file has more rows than specified, the
+  file pointer will be left at the start of the first unread row, and
+  readrows() may be called again to read more of the data.
+
+* Dates are parsed into datetime64 values (requires numpy version 1.6.1).
+  The format of the date is specified with a string using the conventions
+  of the C library function strptime():
+      http://pubs.opengroup.org/onlinepubs/007904975/functions/strptime.html
+  Currently the only datetime64 unit allowed is 'us' (microseconds).
+
+* Embedded newlines are allowed in string fields.
+
+* The decimal point for floating point numbers can be specified (typically
+  this is either '.' or ',').
+
+* The character used for exponential notation can specified as either 'E'
+  or 'D' (case insensitive).  The 'D' character is used by Fortran when
+  writing floating point values with double precision format, e.g.::
+
+        write(100, x, y)
+   100  format(1X, D14.9, 1X, D12.5)
+
+* Complex numbers e.g. '1.23-45.6j' can be read.  (The exact set of
+  complex strings that should be parsed probably needs some work, though.)
+  Currently, there must not be any spaces between the real and imaginary
+  part (regardless of the delimiter).  Also, the imaginary part must
+  include at least one digit.  E.g. '1-j' is invalid.  Either 'i' or 'j'
+  can be used for the imaginary part.
+
+

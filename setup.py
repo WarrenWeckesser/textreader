@@ -12,6 +12,8 @@ src_files = [
         "src/tokenize.c",
         "src/fields.c",
         "src/conversions.c",
+        "src/xstrtod.c",
+        "src/str_to.c",
         ]
 
 if False and (sys.platform == 'darwin' or sys.platform.startswith('linux')):

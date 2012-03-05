@@ -1,11 +1,12 @@
 * Unit tests
 * Autodetect dtype
+* If the given dtype is not a structured array, return a 2D array of the given type.
+  To allocate the memory for the array in this case, the code will need to inspect the first
+  row to determine the number of fields.  This can be done in the first pass through the file,
+  but if the user gives the number of rows to read, at least the first row will have to be
+  inspected before the array can be allocated.
 * Handle missing values.  Currently a missing field is replaced with a value that depends on the
   data type: float -> nan, int -> 0, string -> '', datetime -> 0.
-* Allow the datetime format to be specified by the user (pass in a format string for use with strptime?)
-  This is started, but it needs review and tests.
-* Handle dtypes of structured arrays properly.  Currently it works for simple cases, but it will
-  probably break if given a complicated dtype.
 * Handle and report parsing errors (e.g. "Invalid floating point value '12..34' in field 3 on line 99").
   Include a check that the number of fields read from the file matches the expected number of fields.
 * Add an 'enum' replacement.  This will be a relatively simple replacement scheme, in which a
@@ -13,3 +14,11 @@
   should be reasonably fast.
 * Add callback converters.  This will allow the user to provide their own python function
   to do conversion.
+* Complex numbers are supported, but the set of valid strings that can be converted to
+  complex numbers needs to be defined, and the implementation fixed to properly parse that set.
+* When the user specifies the number of rows to read, and the file has more rows than specified,
+  the file pointer should be left at the start of the first unread row, and readrows() may be
+  called again to read more of the data.  This might already work, but it needs to be tested,
+  so this can be a documented feature.
+* Refactor the source directory.  There should be a self-contained C library, and directory
+  that holds the Cython wrapper and python setup code for build the Python version.

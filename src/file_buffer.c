@@ -16,6 +16,7 @@
 
 typedef struct _file_buffer {
 
+    /* The file being read. */
     FILE *file;
 
     /* Size of the file, in bytes. */
@@ -35,7 +36,7 @@ typedef struct _file_buffer {
     /* Position in the buffer of the next character to read. */
     off64_t current_buffer_pos;
 
-    /* Actual number of bytes in the current buffer. (Can be less then buffer_size.) */
+    /* Actual number of bytes in the current buffer. (Can be less than buffer_size.) */
     off64_t last_pos;
 
     /* Size (in bytes) of the buffer. */
@@ -107,6 +108,10 @@ void del_file_buffer(void *fb, int restore)
     free(fb);
 }
 
+inline int line_number(void *fb)
+{
+    return FB(fb)->line_number;
+}
 
 /*
  *  int _fb_load(void *fb)

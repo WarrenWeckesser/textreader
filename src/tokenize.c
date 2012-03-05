@@ -5,10 +5,15 @@
 #include "file_buffer.h"
 #include "sizes.h"
 #include "constants.h"
+#include "tokenize.h"
+#include "error_types.h"
 
+
+/* Tokenization state machine states. */
 #define TOKENIZE_UNQUOTED   1
 #define TOKENIZE_QUOTED     2
 #define TOKENIZE_WHITESPACE 3
+
 
 /*
  *  tokenize a row of input, with an explicit field delimiter char (sep_char).
@@ -19,11 +24,21 @@
  *  Returns an array of char*.  Points to memory malloc'ed here so it
  *  must be freed by the caller.
  *
+ *  Returns NULL for several different conditions:
+ *  * Reached EOF before finding *any* data to parse.
+ *  * The amount of text copied to word_buffer exceeded the buffer size.
+ *  * Failed to parse a single field. This is the condition field_number == 0
+ *    that is checked after the main loop.  To do: double check exactly what
+ *    can lead to this condition.
+ *  * Out of memory: could not allocate the memory to hold the array of
+ *    char pointer that the function returns.
+ *  * The row has more fields than MAX_NUM_COLUMNS.
  */
 
 static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
                            char sep_char, char quote_char, char comment_char,
-                           int *p_num_fields, int allow_embedded_newline)
+                           int *p_num_fields, int allow_embedded_newline,
+                           int *p_error_type)
 {
     int n;
     char *stop;
@@ -33,13 +48,15 @@ static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
     char *p_word_start, *p_word_end;
     int field_number;
     char **result;
-    int overflow = FALSE;
+
+    *p_error_type = 0;
 
     while (next(fb) == comment_char) {
         skipline(fb);
     }
 
     if (next(fb) == FB_EOF) {
+        *p_error_type = ERROR_NO_DATA;
         return NULL;
     }
 
@@ -50,16 +67,20 @@ static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
 
     while (TRUE) {
         if ((p_word_end - word_buffer) >= word_buffer_size) {
-            overflow = TRUE;
+            *p_error_type = ERROR_TOO_MANY_CHARS;
+            break;
+        }
+        if (field_number >= MAX_NUM_COLUMNS) {
+            *p_error_type = ERROR_TOO_MANY_FIELDS;
             break;
         }
         c = fetch(fb);
-        // printf("c=%c (%d) next=%c (%d) state=%d\n", c, c, next(fb), next(fb), state);
         if (state == TOKENIZE_UNQUOTED) {
             if (c == quote_char) {
                 // Opening quote. Switch state to TOKENIZE_QUOTED.
                 state = TOKENIZE_QUOTED;
             } else if ((c == sep_char) || (c == comment_char) || (c == '\n') || (c == FB_EOF)) {
+                // End of a field.  Save the field, and remain in this state.
                 *p_word_end = '\0';
                 words[field_number] = p_word_start;
                 ++field_number;
@@ -104,19 +125,20 @@ static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
         }
     }
 
-    if (overflow) {
-        printf("tokenize_sep: line too long");
+    if (*p_error_type) {
         return NULL;
     }
 
     if (field_number == 0) {
+        /* XXX Is this the appropriate error type? */
+        *p_error_type = ERROR_NO_DATA;
         return NULL;
     }
 
     *p_num_fields = field_number;
     result = (char **) malloc(sizeof(char *) * field_number);
     if (result == NULL) {
-        printf("tokenize_sep: out of memory for result\n");
+        *p_error_type = ERROR_OUT_OF_MEMORY;
         return NULL;
     }
 
@@ -124,21 +146,26 @@ static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
         result[n] = words[n];
     }
 
-    return(result);
+    return result;
 }
 
-// XXX Currently, 'white space' is simply one or more space characters.
-//     This could be extended to sequence of spaces and tabs without too
-//     much effort.
-//
-// XXX double check the use of 'strict_quoting'
-//
+
+/*
+ *  XXX Currently, 'white space' is simply one or more space characters.
+ *      This could be extended to sequence of spaces and tabs without too
+ *      much effort.
+ *
+ *  XXX double check the use of 'strict_quoting'
+ *
+ *  XXX Returns NULL for several different error cases or edge cases.
+ *      This needs to be refined.
+ */
 
 static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
                           char quote_char, char comment_char,
                           int *p_num_fields,
                           int allow_embedded_newline,
-                          int strict_quoting)
+                          int strict_quoting, int *p_error_type)
 {
     int n;
     char *p;
@@ -149,13 +176,15 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
     char *p_word_start, *p_word_end;
     int field_number;
     char **result;
-    int overflow = FALSE;
+
+    *p_error_type = 0;
 
     while (next(fb) == comment_char) {
         skipline(fb);
     }
 
     if (next(fb) == FB_EOF) {
+        *p_error_type = ERROR_NO_DATA;
         return NULL;
     }
 
@@ -163,9 +192,14 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
     field_number = 0;
     p_word_start = word_buffer;
     p_word_end = p_word_start;
+
     while (TRUE) {
         if ((p_word_end - word_buffer) >= word_buffer_size) {
-            overflow = TRUE;
+            *p_error_type = ERROR_TOO_MANY_CHARS;
+            break;
+        }
+        if (field_number == MAX_NUM_COLUMNS) {
+            *p_error_type = ERROR_TOO_MANY_FIELDS;
             break;
         }
         c = fetch(fb);
@@ -239,8 +273,13 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
         } 
     }
 
-    if (overflow) {
-        printf("tokenize_ws: line too long\n");
+    if (*p_error_type) {
+        return NULL;
+    }
+
+    if (field_number == 0) {
+        /* XXX Is this the appropriate error type? */
+        *p_error_type = ERROR_NO_DATA;
         return NULL;
     }
 
@@ -248,7 +287,7 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
 
     result = (char **) malloc(sizeof(char *) * field_number);
     if (result == NULL) {
-        printf("tokenize_ws: out of memory for result\n");
+        *p_error_type = ERROR_OUT_OF_MEMORY;
         return NULL;
     }
 
@@ -256,24 +295,25 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
         result[n] = words[n];
     }
 
-    return(result);
+    return result;
 }
 
 
 char **tokenize(void *fb, char *word_buffer, int word_buffer_size,
                 char sep_char, char quote_char, char comment_char,
-                int *p_num_fields, int allow_embedded_newline)
+                int *p_num_fields, int allow_embedded_newline,
+                int *p_error_type)
 {
     char **result;
 
     if (sep_char == 0) {
         result = tokenize_ws(fb, word_buffer, word_buffer_size,
                              quote_char, comment_char, p_num_fields,
-                             allow_embedded_newline, TRUE);
+                             allow_embedded_newline, TRUE, p_error_type);
     } else {
         result = tokenize_sep(fb, word_buffer, word_buffer_size,
                               sep_char, quote_char, comment_char, p_num_fields,
-                              allow_embedded_newline);
+                              allow_embedded_newline, p_error_type);
     }
     return result;
 }

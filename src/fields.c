@@ -6,7 +6,10 @@
 #include "field_type.h"
 
 /*
- *  Format characters for data types:
+ *  Format characters for data types (mostly compatible with
+ *  the codes in the python struct module):
+ *    b : 8 bit signed char
+ *    B : 8 bit unsigned char
  *    h : 16 bit signed integer
  *    H : 16 bit unsigned integer
  *    i : 32 bit signed integer
@@ -15,10 +18,16 @@
  *    Q : 64 bit unsigned integer
  *    f : 32 bit floating point
  *    d : 64 bit floating point
+ *    c : 32 bit complex (real and imag are each 32 bit)
+ *    z : 64 bit complex (real and imag are each 64 bit)
  *    s : character
  *    U : 64 bit datetime (very experimental)
  */
 
+/*
+ *  XXX Eliminate the code duplication in calc_size() and
+ *      enumerate_fields().
+ */
 
 /*
  *  int calc_size(char *fmt, int *p_nfields)
@@ -55,7 +64,11 @@ int calc_size(char *fmt, int *p_nfields)
         }
         errno = 0;
         p = p_end;
-        if (*p == 'h' || *p == 'H') {
+        if (*p == 'b' || *p == 'B') {
+            size += repcount;
+            ++p;
+        }
+        else if (*p == 'h' || *p == 'H') {
             size += repcount * 2;
             ++p;
         }
@@ -63,8 +76,12 @@ int calc_size(char *fmt, int *p_nfields)
             size += repcount * 4;
             ++p;
         }
-        else if (*p == 'q' || *p == 'Q' || *p == 'd' || *p == 'U') {
+        else if (*p == 'q' || *p == 'Q' || *p == 'd' || *p == 'c' || *p == 'U') {
             size += repcount * 8;
+            ++p;
+        }
+        else if (*p == 'z') {
+            size += repcount * 16;
             ++p;
         }
         else if (*p == 's') {
@@ -114,7 +131,11 @@ field_type *enumerate_fields(char *fmt)
         errno = 0;
         p = p_end;
         c = *p;
-        if (c == 'h' || c == 'H') {
+        if (c == 'b' || c == 'B') {
+            item_size = 1;
+            ++p;
+        }
+        else if (c == 'h' || c == 'H') {
             item_size = 2;
             ++p;
         }
@@ -122,8 +143,12 @@ field_type *enumerate_fields(char *fmt)
             item_size = 4;
             ++p;
         }
-        else if (c == 'q' || c == 'Q' || c == 'd' || c == 'U') {
+        else if (c == 'q' || c == 'Q' || c == 'd' || c == 'c' || c == 'U') {
             item_size = 8;
+            ++p;
+        }
+        else if (c == 'z') {
+            item_size = 16;
             ++p;
         }
         else if (c == 's') {

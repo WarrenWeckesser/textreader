@@ -12,12 +12,17 @@
 #include "conversions.h"
 #include "constants.h"
 #include "fields.h"
+#include "rows.h"
+#include "error_types.h"
+
+int64_t str_to_int64(const char *p_item, int64_t int_min, int64_t int_max, int *error);
+uint64_t str_to_uint64(const char *p_item, uint64_t uint_max, int *error);
+
 
 /*
  *  XXX Might want to couple count_rows() with read_rows() to avoid duplication
  *      of some file I/O.
  */
-
 
 /*
  *  WORD_BUFFER_SIZE determines the maximum amount of non-delimiter
@@ -41,6 +46,7 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
     int num_fields;
     char **result;
     char word_buffer[WORD_BUFFER_SIZE];
+    int tok_error_type;
 
     fb = new_file_buffer(f, -1);
     if (fb == NULL) {
@@ -49,7 +55,7 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
  
     row_count = 0;
     while ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
-                              delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
+                              delimiter, quote, comment, &num_fields, TRUE, &tok_error_type)) != NULL) {
         if (result == NULL) {
             row_count = -1;
             break;
@@ -65,7 +71,43 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
 
 
 /*
+ *  XXX Work-in-progress: need a way to get the number of fields when the user gives
+ *  a dtype that is not a structured array.  count_fields() is not done; it will have
+ *  to duplicate the initial code in read_rows() (skip comments, skip skiprows, etc).
+ *  Something like goto_first_row() could be written to eliminate repeated code.
+ */
+ /*
+int count_fields(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline)
+{
+    void *fb;
+    int row_count;
+    int num_fields;
+    char **result;
+    char word_buffer[WORD_BUFFER_SIZE];
+    int tok_error_type;
+
+    fb = new_file_buffer(f, -1);
+    if (fb == NULL) {
+        return -1;
+    }
+ 
+    result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+                      delimiter, quote, comment, &num_fields, TRUE, &tok_error_type)
+    if (result == NULL) {
+        num_fields = -1;
+    }
+    free(result);
+
+    del_file_buffer(fb, RESTORE_INITIAL);
+
+    return num_fields;
+}
+*/
+
+/*
  *  XXX Handle errors in any of the functions called by read_rows().
+ *
+ *  XXX Currently *nrows must be at least 1.
  */
 
 void *read_rows(FILE *f, int *nrows, char *fmt,
@@ -73,20 +115,27 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
                 char sci, char decimal,
                 int allow_embedded_newline,
                 char *datetime_fmt,
+                int tz_offset,
                 int *usecols, int num_usecols,
                 int skiprows,
-                void *data_array)
+                void *data_array,
+                int *p_error_type, int *p_error_lineno)
 {
     void *fb;
     char *data_ptr;
-    int num_fields;
+    int num_fields, current_num_fields;
     char **result;
     int fmt_nfields;
     field_type *ftypes;
     int size;
     int row_count;
-    int k;
+    int j;
+    int *valid_usecols;
     char word_buffer[WORD_BUFFER_SIZE];
+    int tok_error_type;
+
+    *p_error_type = 0;
+    *p_error_lineno = 0;
 
     if (datetime_fmt == NULL || strlen(datetime_fmt) == 0) {
         datetime_fmt = "%Y-%m-%d %H:%M:%S";
@@ -94,7 +143,12 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
 
     size = (*nrows) * calc_size(fmt, &fmt_nfields);
 
-    ftypes = enumerate_fields(fmt);
+    ftypes = enumerate_fields(fmt);  /* Must free this when finished. */
+    if (ftypes == NULL) {
+        /* Out of memory. */
+        *p_error_type = READ_ERROR_OUT_OF_MEMORY;
+        return NULL;
+    }
 
     /*
     for (k = 0; k < fmt_nfields; ++k) {
@@ -105,16 +159,23 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
     */
 
     if (data_array == NULL) {
-        /* XXX The case where data_array is allocated here is untested. */
-        data_array = malloc(size);
+        /* XXX The case where data_ptr is allocated here is untested. */
+        data_ptr = malloc(size);
     }
-    data_ptr = data_array;
+    else {
+        data_ptr = data_array;
+    }
 
     fb = new_file_buffer(f, -1);
+    if (fb == NULL) {
+        free(ftypes);
+        *p_error_type = ERROR_OUT_OF_MEMORY;
+        return NULL;
+    }
 
     /* XXX Check interaction of skiprows with comments. */
     while ((skiprows > 0) && ((result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
-                              delimiter, quote, comment, &num_fields, TRUE)) != NULL)) {
+                              delimiter, quote, comment, &num_fields, TRUE, &tok_error_type)) != NULL)) {
         if (result == NULL) {
             break;
         }
@@ -122,56 +183,169 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
         --skiprows;
     }
 
+    if (skiprows > 0) {
+        /* There were fewer rows in the file than skiprows. */
+        /* This is not treated as an error. The result should be an empty array. */
+        *nrows = 0;
+        free(ftypes);
+        del_file_buffer(fb, RESTORE_FINAL);
+        return data_ptr;
+    }
+
+    /* XXX Assume *nrows > 0! */
+    /*
+     *  Read the first row to get the number of fields in the file.
+     *  We'll then use this to pre-validate the values in usecols.
+     *  (It might be easier to do this in the Python wrapper, but that
+     *  would require refactoring the C interface a bit to expose more
+     *  to Python.)
+     */
     row_count = 0;
-    while ((row_count < *nrows) && (result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
-                              delimiter, quote, comment, &num_fields, TRUE)) != NULL) {
-        /*
-         * XXX Need to check that num_fields has the expected value, and that
-         *     each col in usecols is valid.  We should allow these values to
-         *     be negative, so -1 means the last column, etc, i.e.
-         *         -num_fields <= col < num_fields
-         */
+    result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+                              delimiter, quote, comment, &num_fields, TRUE, &tok_error_type);
+    if (result == NULL) {
+        *p_error_type = tok_error_type;
+        *p_error_lineno = 1;
+        free(ftypes);
+        del_file_buffer(fb, RESTORE_FINAL);
+        return NULL;
+    }
+
+    valid_usecols = (int *) malloc(num_usecols * sizeof(int));
+    if (valid_usecols == NULL) {
+        /* Out of memory. */
+        *p_error_type = ERROR_OUT_OF_MEMORY;
+        free(result);
+        free(ftypes);
+        del_file_buffer(fb, RESTORE_FINAL);
+        return NULL;
+    }
+
+    /*
+     *  Validate the column indices in usecols, and put the validated
+     *  column indices in valid_usecols.
+     */
+    for (j = 0; j < num_usecols; ++j) {
+
+        int k;
+        k = usecols[j];
+        if (k < -num_fields || k >= num_fields) {
+            /* Invalid column index. */
+            *p_error_type = ERROR_INVALID_COLUMN_INDEX;
+            *p_error_lineno = j;  /* Abuse 'lineno' and put the bad column index there. */
+            free(valid_usecols);
+            free(result);
+            free(ftypes);
+            del_file_buffer(fb, RESTORE_FINAL);
+            return NULL;
+        }
+        if (k < 0) {
+            k += num_fields;
+        }
+        valid_usecols[j] = k;
+    }
+
+    current_num_fields = num_fields;
+    row_count = 0;
+    do {
         int j, k;
         int item_type;
         double x;
         long long m;
+
+        if (current_num_fields != num_fields) {
+            *p_error_type = ERROR_CHANGED_NUMBER_OF_FIELDS;
+            *p_error_lineno = line_number(fb);
+            break;
+        }
+
         for (j = 0; j < num_usecols; ++j) {
-            k = usecols[j];
-            if (ftypes[j].typechar == 'q' || ftypes[j].typechar == 'i' || ftypes[j].typechar == 'h') {
-                // Convert to int.
-                long long x;
-                if (to_longlong(result[k], &x)) {
-                    if (ftypes[j].typechar == 'i')
-                        *(int32_t *) data_ptr = (int32_t) x;
-                    else if (ftypes[j].typechar == 'h')
-                        *(int16_t *) data_ptr = (int16_t) x;
-                    else
-                        *(int64_t *) data_ptr = (int64_t) x;
-                }
-                else {
-                    // Conversion failed.  Fill with 0.
-                    memset(data_ptr, 0, ftypes[j].size);
-                }
+
+            int error;
+            char typ = ftypes[j].typechar;
+            /* k is the column index of the field in the file. */
+            k = valid_usecols[j];
+
+            /* XXX Handle error != 0 in the following cases. */
+            if (typ == 'b') {
+                int8_t x = (int8_t) str_to_int64(result[k], INT8_MIN, INT8_MAX, &error);
+                *(int8_t *) data_ptr = x;
                 data_ptr += ftypes[j].size;
             }
-            else if (ftypes[j].typechar == 'f' || ftypes[j].typechar == 'd') {
+            else if (typ == 'B') {
+                uint8_t x = (uint8_t) str_to_uint64(result[k], UINT8_MAX, &error);
+                *(uint8_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;   
+            }
+            else if (typ == 'h') {
+                int16_t x = (int16_t) str_to_int64(result[k], INT16_MIN, INT16_MAX, &error);
+                *(int16_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;
+            }
+            else if (typ == 'H') {
+                uint16_t x = (uint16_t) str_to_uint64(result[k], UINT16_MAX, &error);
+                *(uint16_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;    
+            }
+            else if (typ == 'i') {
+                int32_t x = (int32_t) str_to_int64(result[k], INT32_MIN, INT32_MAX, &error);
+                *(int32_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;   
+            }
+            else if (typ == 'I') {
+                uint32_t x = (uint32_t) str_to_uint64(result[k], UINT32_MAX, &error);
+                *(uint32_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;   
+            }
+            else if (typ == 'q') {
+                int64_t x = (int64_t) str_to_int64(result[k], INT64_MIN, INT64_MAX, &error);
+                *(int64_t *) data_ptr = x;
+                data_ptr += ftypes[j].size; 
+            }
+            else if (typ == 'Q') {
+                uint64_t x = (uint64_t) str_to_uint64(result[k], UINT64_MAX, &error);
+                *(uint64_t *) data_ptr = x;
+                data_ptr += ftypes[j].size;    
+            }
+            else if (typ == 'f' || typ == 'd') {
                 // Convert to float.
                 double x;
                 if ((strlen(result[k]) == 0) || !to_double(result[k], &x, sci, decimal)) {
                     // XXX  Find the canonical platform-independent method to assign nan.
                     x = 0.0 / 0.0;
                 }
-                if (ftypes[j].typechar == 'f')
+                if (typ == 'f')
                     *(float *) data_ptr = (float) x;
                 else
                     *(double *) data_ptr = x;
                 data_ptr += ftypes[j].size;
             }
-            else if (ftypes[j].typechar == 'U') {
+            else if (typ == 'c' || typ == 'z') {
+                // Convert to complex.
+                double x, y;
+                printf("... '%s'  size=%d\n", result[k], ftypes[j].size);
+                if ((strlen(result[k]) == 0) || !to_complex(result[k], &x, &y, sci, decimal)) {
+                    // XXX  Find the canonical platform-independent method to assign nan.
+                    x = 0.0 / 0.0;
+                    y = x;
+                }
+                if (typ == 'c') {
+                    *(float *) data_ptr = (float) x;
+                    data_ptr += ftypes[j].size / 2;
+                    *(float *) data_ptr = (float) y;
+                }
+                else {
+                    *(double *) data_ptr = x;
+                    data_ptr += ftypes[j].size / 2; 
+                    *(double *) data_ptr = y;
+                }
+                data_ptr += ftypes[j].size / 2;
+            }
+            else if (typ == 'U') {
                 // Datetime64, microseconds.
-                // Hard-coded format, just for testing.
-                struct tm tm;
+                struct tm tm = {0,0,0,0,0,0,0,0,0};
                 time_t t;
+
                 if (strptime(result[k], datetime_fmt, &tm) == NULL) {
                     memset(data_ptr, 0, 8);
                 }
@@ -182,7 +356,7 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
                         memset(data_ptr, 0, 8);
                     }
                     else {
-                        *(uint64_t *) data_ptr = (long long) t * 1000000L;
+                        *(uint64_t *) data_ptr = (long long) (t - tz_offset) * 1000000L;
                     }
                 }
                 data_ptr += 8;
@@ -195,10 +369,14 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
         }
         free(result);
         ++row_count;
-    }
+    } while ((row_count < *nrows) && (result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+                              delimiter, quote, comment, &current_num_fields, TRUE, &tok_error_type)) != NULL);
 
     del_file_buffer(fb, RESTORE_FINAL);
+
     *nrows = row_count;
 
-    return (void *) data_array;
+    free(valid_usecols);
+
+    return (void *) data_ptr;
 }

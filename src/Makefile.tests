@@ -1,0 +1,16 @@
+
+OBJS = test_file_buffer.o file_buffer.o
+
+test: test_file_buffer
+	@echo
+	@echo "----- Running file buffer tests -----"
+	@./test_file_buffer
+	@echo "-------------------------------------"
+	rm -rf $(OBJS) test_file_buffer
+
+test_file_buffer: $(OBJS)
+
+$(OBJS): file_buffer.h
+
+clean:
+	rm -rf $(OBJS) test_file_buffer

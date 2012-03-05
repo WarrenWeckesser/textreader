@@ -1,4 +1,5 @@
 
+import time
 import numpy
 cimport numpy
 
@@ -19,9 +20,11 @@ cdef extern from "rows.h":
                     char sci, char decimal,
                     int allow_embedded_newline,
                     char *datetime_fmt,
+                    int tz_offset,
                     void *usecols, int num_usecols,
                     int skiprows,
-                    void *data_array)
+                    void *data_array,
+                    int *p_error_type, int *p_error_lineno)
 
 
 def countrows(file f, delimiter=None, quote='"', comment='#',
@@ -35,21 +38,18 @@ def countrows(file f, delimiter=None, quote='"', comment='#',
     return count
 
 
+_dtype_str_map = dict(i1='b', u1='B', i2='h', u2='H', i4='i', u4='I',
+                    i8='q', u8='Q', f4='f', f8='d', c8='c', c16='z')
+
 def dtypestr2fmt(st):
-    if st == "f8":
-        fmt = "d"
-    elif st == "f4":
-        fmt = "f"
-    elif st == "i4":
-        fmt = "i"
-    elif st == "i2":
-        fmt = "h"
-    elif st == "M8[us]":
-        fmt = "U"  # Temporary experiment
-    elif st.startswith('S'):
-        fmt = st[1:] + 's'
-    else:
-        raise ValueError('dtypestr2fmt: unsupported dtype string: %s' % (st,))
+    fmt = _dtype_str_map.get(st)
+    if fmt is None:
+        if st == "M8[us]":
+            fmt = 'U'  # Temporary experiment
+        elif st.startswith('S'):
+            fmt = st[1:] + 's'
+        else:
+            raise ValueError('dtypestr2fmt: unsupported dtype string: %s' % (st,))
     return fmt
 
 
@@ -57,29 +57,35 @@ def _prod(x, y):
     return x*y
 
 
-def dtype2fmt(dtype):
-    """ This is not a finished, but it is sufficient for simple cases."""
-    fmt = ''
-    for name in dtype.names:
-        field_dt = dtype[name]
-        if field_dt.subdtype is not None:
-            subdt, shape = field_dt.subdtype
-            n = reduce(_prod, shape)
-            subfmt = dtypestr2fmt(subdt.str[1:])
-            fmt += subfmt * n
+def flatten_dtype(dt):
+
+    if not isinstance(dt, numpy.dtype):
+        dt = numpy.dtype(dt)
+    if dt.names is None:
+        if dt.subdtype is not None:
+            subdt, shape = dt.subdtype
+            if isinstance(shape, int):
+                n = shape
+            else:
+                n = reduce(_prod, shape)
+            fmt = flatten_dtype(subdt) * n
         else:
-            fmt += dtypestr2fmt(field_dt.str[1:])
+            fmt = dtypestr2fmt(dt.str[1:])
+    else:
+        fmt = ''.join(flatten_dtype(dt[name]) for name in dt.names)
     return fmt
 
 
 def readrows(f, dtype, delimiter=None, quote='"', comment='#',
              sci='E', decimal='.',
              allow_embedded_newline=True, datetime_fmt=None,
+             tzoffset=0,
              usecols=None, skiprows=None, numrows=None):
     """
     readrows(f, dtype, delimiter=None, quote='"', comment='#',
              sci='E', decimal='.',
              allow_embedded_newline=True, datetime_fmt=None,
+             tzoffset=0,
              usecols=None, skiprows=None, numrows=None)
 
     Read a CSV (or similar) text file and return a numpy array.
@@ -119,6 +125,9 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     datetime_fmt : str or None, optional
         If not None, this must be a string that can be used by
         strptime to parse a datetime string.
+    tzoffset : int or None, optional
+        Offset in seconds from UTC of date/time values in the file.
+        Default is time.timezone.
     usecols : sequence of ints, optional
         If given, this is the set of column indices (starting
         at 0) of the columns to keep.  The data type given in
@@ -149,13 +158,15 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     cdef char *dt_fmt
     cdef int opened_here = False
     cdef int nrows
+    cdef int error_type, error_lineno
+    cdef int tz_offset
 
     if isinstance(f, basestring):
         opened_here = True
         filename = f
         f = open(f, 'r')
 
-    fmt = dtype2fmt(dtype)
+    fmt = flatten_dtype(dtype)
 
     print "readrows: fmt =", fmt
 
@@ -163,6 +174,11 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
         dt_fmt = ''
     else:
         dt_fmt = datetime_fmt
+
+    if tzoffset is None:
+        tz_offset = time.timezone
+    else:
+        tz_offset = tzoffset
 
     if delimiter is None:
         delimiter = '\x00'
@@ -190,7 +206,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
 
     # XXX Hack
     num_fields = sum(c not in "0123456789" for c in fmt)
-    print "readrows: num_fields =", num_fields
+    ##print "readrows: num_fields =", num_fields
 
     if usecols is None:
         usecols_array = numpy.arange(num_fields, dtype=int)
@@ -203,8 +219,10 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
 
     nrows = numrows
     result = read_rows(PyFile_AsFile(f), &nrows, fmt, ord(delimiter[0]), ord(quote[0]),
-                         ord(comment[0]), ord(sci[0]), ord(decimal[0]), allow_embedded_newline, dt_fmt,
-                         <int *>usecols_array.data, usecols_array.size, skiprows, a.data)
+                         ord(comment[0]), ord(sci[0]), ord(decimal[0]), allow_embedded_newline,
+                         dt_fmt, tz_offset,
+                         <int *>usecols_array.data, usecols_array.size, skiprows, a.data,
+                         &error_type, &error_lineno)
 
     if opened_here:
         f.close()
