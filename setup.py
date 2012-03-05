@@ -7,7 +7,7 @@ from Cython.Distutils import build_ext
 import numpy
 
 src_files = [
-        "src/textreader.pyx",
+        "python/textreader.pyx",
         "src/rows.c",
         "src/tokenize.c",
         "src/fields.c",
