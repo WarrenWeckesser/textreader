@@ -26,7 +26,12 @@ Features
   the array is allocated based on the specified number of rows.
 
   If fewer rows than specified are found in the file, the array that is
-  returned is a view of the originally allocated array. 
+  returned is a view of the originally allocated array.
+
+  If the file has more rows than specified, the file pointer will be
+  left at the start of the unread data, so readrows() (or anything else)
+  can be called to continue reading the file.  (See examples/read_multi.py
+  for an example of reading three arrays from one file.)
 
 * Dates are parsed into datetime64 values (requires numpy version 1.6.1).
   The format of the date is specified with a string using the conventions
