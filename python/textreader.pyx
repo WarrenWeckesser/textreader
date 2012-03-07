@@ -15,6 +15,8 @@ cdef extern from "fileobject.h":
 cdef extern from "rows.h":
     int count_rows(FILE *f, char delimiter, char quote, char comment,
                    int allow_embedded_newline)
+    int count_fields(FILE *f, char delimiter, char quote, char comment,
+                     int allow_embedded_newline)
     void *read_rows(FILE *f, int *nrows, char *fmt,
                     char delimiter, char quote, char comment,
                     char sci, char decimal,
@@ -34,6 +36,17 @@ def countrows(file f, delimiter=None, quote='"', comment='#',
         delimiter = ' '
 
     count = count_rows(PyFile_AsFile(f), ord(delimiter[0]), ord(quote[0]), ord(comment[0]),
+                       allow_embedded_newline)
+    return count
+
+
+def countfields(file f, delimiter=None, quote='"', comment='#',
+                    allow_embedded_newline=True):
+    cdef int count
+    if delimiter is None:
+        delimiter = ' '
+
+    count = count_fields(PyFile_AsFile(f), ord(delimiter[0]), ord(quote[0]), ord(comment[0]),
                        allow_embedded_newline)
     return count
 
@@ -160,15 +173,7 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     cdef int nrows
     cdef int error_type, error_lineno
     cdef int tz_offset
-
-    if isinstance(f, basestring):
-        opened_here = True
-        filename = f
-        f = open(f, 'r')
-
-    fmt = flatten_dtype(dtype)
-
-    print "readrows: fmt =", fmt
+    cdef int num_filed_fields
 
     if datetime_fmt is None:
         dt_fmt = ''
@@ -193,6 +198,24 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if skiprows is None:
         skiprows = 0
 
+    if isinstance(f, basestring):
+        opened_here = True
+        filename = f
+        f = open(f, 'r')
+
+    if not isinstance(dtype, numpy.dtype):
+        dtype = numpy.dtype(dtype)
+    simple_dtype = False
+    if dtype.names is None and dtype.subdtype is None:
+        # Not a structured array or other complex dtype.
+        simple_dtype = True
+        num_file_fields = countfields(f, delimiter, quote, comment, allow_embedded_newline)
+        fmt = dtypestr2fmt(dtype.str[1:])
+    else:
+        fmt = flatten_dtype(dtype)
+
+    print "readrows: fmt =", fmt
+
     if numrows is None:
         numrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
         if numrows == -1:
@@ -204,18 +227,26 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     # how long countrows() takes.
     print "readrows: numrows =", numrows
 
-    # XXX Hack
-    num_fields = sum(c not in "0123456789" for c in fmt)
-    ##print "readrows: num_fields =", num_fields
-
-    if usecols is None:
-        usecols_array = numpy.arange(num_fields, dtype=int)
+    if simple_dtype:
+        if usecols is None:
+            num_fields = num_file_fields
+            usecols_array = numpy.arange(num_fields, dtype=int)
+        else:
+            usecols_array = numpy.asarray(usecols, dtype=int)
+            num_fields = usecols_array.size
+        fmt = fmt * num_fields
+        shape = (numrows, num_fields)
     else:
-        usecols_array = numpy.asarray(usecols, dtype=int)
-        if usecols_array.size > num_fields:
-            raise ValueError("Length of the 'usecols' sequence exceeds the number of fields in the dtype.")
+        if usecols is None:
+            num_fields = sum(c not in "0123456789" for c in fmt)
+            usecols_array = numpy.arange(num_fields, dtype=int)
+        else:
+            usecols_array = numpy.asarray(usecols, dtype=int)
+            #if usecols_array.size > num_fields:
+            #    raise ValueError("Length of the 'usecols' sequence exceeds the number of fields in the dtype.")
+        shape = (numrows,)
 
-    a = numpy.empty((numrows,), dtype=dtype)
+    a = numpy.empty(shape, dtype=dtype)
 
     nrows = numrows
     result = read_rows(PyFile_AsFile(f), &nrows, fmt, ord(delimiter[0]), ord(quote[0]),

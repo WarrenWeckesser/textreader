@@ -3,6 +3,9 @@
 
 int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline);
 
+int count_fields(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline);
+
+
 void *read_rows(FILE *f, int *nrows, char *fmt,
                 char delimiter, char quote, char comment,
                 char sci, char decimal,

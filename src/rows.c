@@ -70,6 +70,33 @@ int count_rows(FILE *f, char delimiter, char quote, char comment, int allow_embe
 }
 
 
+int count_fields(FILE *f, char delimiter, char quote, char comment, int allow_embedded_newline)
+{
+    void *fb;
+    int num_fields;
+    char **result;
+    char word_buffer[WORD_BUFFER_SIZE];
+    int tok_error_type;
+
+    fb = new_file_buffer(f, -1);
+    if (fb == NULL) {
+        return -1;
+    }
+ 
+    result = tokenize(fb, word_buffer, WORD_BUFFER_SIZE,
+                      delimiter, quote, comment, &num_fields, TRUE, &tok_error_type);
+    if (result == NULL) {
+        num_fields = -1;
+    }
+    else {
+        free(result);
+    }
+
+    del_file_buffer(fb, RESTORE_INITIAL);
+
+    return num_fields;
+}
+
 /*
  *  XXX Work-in-progress: need a way to get the number of fields when the user gives
  *  a dtype that is not a structured array.  count_fields() is not done; it will have
@@ -103,6 +130,7 @@ int count_fields(FILE *f, char delimiter, char quote, char comment, int allow_em
     return num_fields;
 }
 */
+
 
 /*
  *  XXX Handle errors in any of the functions called by read_rows().
