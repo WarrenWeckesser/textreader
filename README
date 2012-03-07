@@ -15,7 +15,7 @@ The C function strptime is used for parsing dates.  A work-around for this
 (perhaps just disabling date parsing as a quick fix) will be needed get
 textreader compiled on Windows.
 
-The directory examples/ contains, well, examples.
+The directory python/examples/ contains, well, examples.
 
 While the primary motivation for this code is to have a faster, more efficient
 tool for reading CSV files into NumPy arrays, most of the code is written in
