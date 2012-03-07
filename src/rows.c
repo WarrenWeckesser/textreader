@@ -323,7 +323,6 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
             else if (typ == 'c' || typ == 'z') {
                 // Convert to complex.
                 double x, y;
-                printf("... '%s'  size=%d\n", result[k], ftypes[j].size);
                 if ((strlen(result[k]) == 0) || !to_complex(result[k], &x, &y, sci, decimal)) {
                     // XXX  Find the canonical platform-independent method to assign nan.
                     x = 0.0 / 0.0;

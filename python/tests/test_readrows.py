@@ -84,3 +84,27 @@ def test4():
     else:
         assert_array_equal(a, b)
     os.remove(filename)
+
+def test5():
+    text = """\
+  1.0-2.0j, 3+4j
+  5.0e-1, 6.0+0j
+"""
+
+    f = open(filename, 'w')
+    f.write(text)
+    f.close()
+
+    dt = np.dtype([('x', np.complex128), ('y', np.complex128)])
+    a = np.array([(1.0-2.0j, 3.0+4.0j), (0.5, 6.0)], dtype=dt)
+    b = readrows(filename, dt, delimiter=',')
+
+    if np.__version__ == '1.4.1':
+        # XXX Test fixed for 1.4.1. I haven't tracked down why assert_array_equal
+        # fails in 1.4.1.  I also haven't tried it with 1.5.1.
+        assert_equal(a.shape, b.shape)
+        for arow, brow in zip(a,b):
+            assert_array_equal(arow, brow)
+    else:
+        assert_array_equal(a, b)
+    os.remove(filename)
