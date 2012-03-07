@@ -1,3 +1,4 @@
+Yet another text reader for NumPy.
 
 The textreader module has the function readrows, which reads CSV (and similar)
 text files into a numpy array.
@@ -7,9 +8,21 @@ This is experimental, unreleased software.  Use at your own risk.
 To install, you will need cython.  In the top directory, run
 $ python setup.py install
 
+So far, readrows() has been tested with Python 2.7.2, using
+numpy 1.4.1 and 1.6.1.
+
+The C function strptime is used for parsing dates.  A work-around for this
+(perhaps just disabling date parsing as a quick fix) will be needed get
+textreader compiled on Windows.
+
 The directory examples/ contains, well, examples.
 
-Tested with numpy 1.4.1 and 1.6.1.
+While the primary motivation for this code is to have a faster, more efficient
+tool for reading CSV files into NumPy arrays, most of the code is written in
+C (in the src/ directory), and can be used independent of Python.  Other than
+setup.py in the top directory, all the Python-specific code is in the python/
+directory.
+
 
 Features
 --------
