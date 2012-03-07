@@ -21,8 +21,15 @@ if False and (sys.platform == 'darwin' or sys.platform.startswith('linux')):
 else:
     src_files.append('src/file_buffer.c')
 
+define_macros = []
+if sys.platform.startswith('linux'):
+    # XXX Is the condition for this too broad?  Should it be only for linux and gcc?
+    define_macros.extend([('_FILE_OFFSET_BITS', '64'),
+                          ('_XOPEN_SOURCE', '600')])
+
 ext = Extension("textreader", src_files,
-                include_dirs = ['src', numpy.get_include()])
+                include_dirs = ['src', numpy.get_include()],
+                define_macros=define_macros)
 
 setup(
     name='textreader',

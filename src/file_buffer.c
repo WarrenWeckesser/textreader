@@ -4,15 +4,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "file_buffer.h"
 
-#ifdef __APPLE__
-#define fseeko64 fseek
-#define ftello64 ftell
-#define off64_t off_t
-#endif
-
 #define DEFAULT_BUFFER_SIZE 16777216
+
 
 typedef struct _file_buffer {
 
@@ -20,10 +18,10 @@ typedef struct _file_buffer {
     FILE *file;
 
     /* Size of the file, in bytes. */
-    off64_t size;
+    off_t size;
 
     /* file position when the file_buffer was created. */
-    off64_t initial_file_pos;
+    off_t initial_file_pos;
 
     int line_number;
 
@@ -31,16 +29,16 @@ typedef struct _file_buffer {
     int reached_eof;
 
     /* Offset in the file of the data currently in the buffer. */
-    off64_t buffer_file_pos;
+    off_t buffer_file_pos;
 
     /* Position in the buffer of the next character to read. */
-    off64_t current_buffer_pos;
+    off_t current_buffer_pos;
 
     /* Actual number of bytes in the current buffer. (Can be less than buffer_size.) */
-    off64_t last_pos;
+    off_t last_pos;
 
     /* Size (in bytes) of the buffer. */
-    off64_t buffer_size;
+    off_t buffer_size;
 
     /* Pointer to the buffer. */
     char *buffer;
@@ -69,7 +67,7 @@ void *new_file_buffer(FILE *f, int buffer_size)
     }
 
     fb->file = f;
-    fb->initial_file_pos = ftello64(f);
+    fb->initial_file_pos = ftell(f);
 
     fb->line_number = 0;  // XXX Maybe more natural to start at 1?
 
@@ -99,10 +97,10 @@ void *new_file_buffer(FILE *f, int buffer_size)
 void del_file_buffer(void *fb, int restore)
 {
     if (restore == RESTORE_INITIAL) {
-        fseeko64(FB(fb)->file, FB(fb)->initial_file_pos, SEEK_SET);
+        fseek(FB(fb)->file, FB(fb)->initial_file_pos, SEEK_SET);
     }
     else if (restore == RESTORE_FINAL) {
-        fseeko64(FB(fb)->file, FB(fb)->buffer_file_pos + FB(fb)->current_buffer_pos, SEEK_SET);
+        fseek(FB(fb)->file, FB(fb)->buffer_file_pos + FB(fb)->current_buffer_pos, SEEK_SET);
     }
     free(FB(fb)->buffer);
     free(fb);
@@ -132,7 +130,7 @@ int _fb_load(void *fb)
             buffer[0] = buffer[FB(fb)->current_buffer_pos];
         }
 
-        FB(fb)->buffer_file_pos  = ftello64(FB(fb)->file) - k;
+        FB(fb)->buffer_file_pos  = ftell(FB(fb)->file) - k;
         
         num_read = fread(&(buffer[k]), 1, FB(fb)->buffer_size - k, FB(fb)->file);
 
