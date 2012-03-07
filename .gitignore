@@ -7,7 +7,7 @@
 *~
 python/build
 python/dist
-src/textreader.c
+python/textreader.c
 python/examples/data/big.csv
 python/examples/data/time_samples.csv
 
