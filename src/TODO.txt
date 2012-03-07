@@ -11,5 +11,3 @@
   to do conversion.
 * Complex numbers are supported, but the set of valid strings that can be converted to
   complex numbers needs to be defined, and the implementation fixed to properly parse that set.
-* Refactor the source directory.  There should be a self-contained C library, and directory
-  that holds the Cython wrapper and python setup code for build the Python version.
