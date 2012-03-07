@@ -9,7 +9,7 @@ To install, you will need cython.  In the top directory, run
 $ python setup.py install
 
 So far, readrows() has been tested with Python 2.7.2, using
-numpy 1.4.1 and 1.6.1.
+numpy 1.4.1, 1.5.1, and 1.6.1.
 
 The C function strptime is used for parsing dates.  A work-around for this
 (perhaps just disabling date parsing as a quick fix) will be needed get

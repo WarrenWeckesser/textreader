@@ -10,9 +10,9 @@ filename = 'tmp.txt'
 
 
 def my_assert_array_equal(a, b):
-    if np.__version__ == '1.4.1':
-        # XXX Test fixed for 1.4.1. I haven't tracked down why assert_array_equal
-        # fails in 1.4.1.  I also haven't tried it with 1.5.1.
+    if np.__version__ == '1.4.1' or np.__version__ == '1.5.1':
+        # XXX Test fixed for 1.4.1 and 1.5.1. I haven't tracked down why
+        # assert_array_equal fails in these older numpy versions.
         assert_equal(a.shape, b.shape)
         for arow, brow in zip(a, b):
             assert_array_equal(arow, brow)
