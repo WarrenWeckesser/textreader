@@ -85,7 +85,7 @@ def flatten_dtype(dt):
         else:
             fmt = dtypestr2fmt(dt.str[1:])
     else:
-        fmt = ''.join(flatten_dtype(dt[name]) for name in dt.names)
+        fmt = ''.join([flatten_dtype(dt[name]) for name in dt.names])
     return fmt
 
 
@@ -214,8 +214,6 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     else:
         fmt = flatten_dtype(dtype)
 
-    print "readrows: fmt =", fmt
-
     if numrows is None:
         numrows = countrows(f, delimiter, quote, comment, allow_embedded_newline)
         if numrows == -1:
@@ -230,18 +228,18 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if simple_dtype:
         if usecols is None:
             num_fields = num_file_fields
-            usecols_array = numpy.arange(num_fields, dtype=int)
+            usecols_array = numpy.arange(num_fields, dtype=numpy.int32)
         else:
-            usecols_array = numpy.asarray(usecols, dtype=int)
+            usecols_array = numpy.asarray(usecols, dtype=numpy.int32)
             num_fields = usecols_array.size
         fmt = fmt * num_fields
         shape = (numrows, num_fields)
     else:
         if usecols is None:
             num_fields = sum(c not in "0123456789" for c in fmt)
-            usecols_array = numpy.arange(num_fields, dtype=int)
+            usecols_array = numpy.arange(num_fields, dtype=numpy.int32)
         else:
-            usecols_array = numpy.asarray(usecols, dtype=int)
+            usecols_array = numpy.asarray(usecols, dtype=numpy.int32)
             #if usecols_array.size > num_fields:
             #    raise ValueError("Length of the 'usecols' sequence exceeds the number of fields in the dtype.")
         shape = (numrows,)
@@ -258,7 +256,6 @@ def readrows(f, dtype, delimiter=None, quote='"', comment='#',
     if opened_here:
         f.close()
 
-    print "numrows =", numrows, "  nrows =", nrows
     if nrows < numrows:
         a = a[:nrows]
 

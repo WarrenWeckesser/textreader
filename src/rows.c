@@ -144,7 +144,7 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
                 int allow_embedded_newline,
                 char *datetime_fmt,
                 int tz_offset,
-                int *usecols, int num_usecols,
+                int32_t *usecols, int num_usecols,
                 int skiprows,
                 void *data_array,
                 int *p_error_type, int *p_error_lineno)
@@ -255,7 +255,7 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
      */
     for (j = 0; j < num_usecols; ++j) {
 
-        int k;
+        int32_t k;
         k = usecols[j];
         if (k < -num_fields || k >= num_fields) {
             /* Invalid column index. */
