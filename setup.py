@@ -16,7 +16,10 @@ src_files = [
         "src/str_to.c",
         ]
 
-if False and (sys.platform == 'darwin' or sys.platform.startswith('linux')):
+
+with_mmap = True
+if with_mmap and (sys.platform == 'darwin' or sys.platform.startswith('linux')):
+    print "Using memory mapped file buffer interface."
     src_files.append('src/file_buffer_mm.c')
 else:
     src_files.append('src/file_buffer.c')
