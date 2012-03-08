@@ -136,11 +136,14 @@ int _fb_load(void *fb)
 
         FB(fb)->current_buffer_pos = 0;
         FB(fb)->last_pos = num_read + k;
-        if (num_read < FB(fb)->buffer_size - k)
-            if (feof(FB(fb)->file))
+        if (num_read < FB(fb)->buffer_size - k) {
+            if (feof(FB(fb)->file)) {
                 FB(fb)->reached_eof = 1;
-            else
+            }
+            else {
                 return FB_ERROR;
+            }
+        }
     }
     return 0;
 }

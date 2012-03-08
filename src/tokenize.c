@@ -41,7 +41,6 @@ static char **tokenize_sep(void *fb, char *word_buffer, int word_buffer_size,
                            int *p_error_type)
 {
     int n;
-    char *stop;
     char c;
     int state;
     char *words[MAX_NUM_COLUMNS];
@@ -168,8 +167,6 @@ static char **tokenize_ws(void *fb, char *word_buffer, int word_buffer_size,
                           int strict_quoting, int *p_error_type)
 {
     int n;
-    char *p;
-    char *stop;
     char c;
     int state;
     char *words[MAX_NUM_COLUMNS];

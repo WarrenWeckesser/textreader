@@ -277,9 +277,6 @@ void *read_rows(FILE *f, int *nrows, char *fmt,
     row_count = 0;
     do {
         int j, k;
-        int item_type;
-        double x;
-        long long m;
 
         if (current_num_fields != num_fields) {
             *p_error_type = ERROR_CHANGED_NUMBER_OF_FIELDS;

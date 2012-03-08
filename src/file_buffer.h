@@ -38,3 +38,4 @@ int line_number(void *fb);
 
 int fetch(void *fb);
 int next(void *fb);
+void skipline(void *fb);

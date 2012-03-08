@@ -49,7 +49,6 @@ int calc_size(char *fmt, int *p_nfields)
 {
     int size;
     unsigned long repcount;
-    unsigned long slen;
     char *p, *p_end;
  
     size = 0;
@@ -104,7 +103,6 @@ field_type *enumerate_fields(char *fmt)
 {
     int item_size, fmt_size;
     unsigned long repcount;
-    unsigned long slen;
     char *p, *p_end;
     int nfields;
     field_type *result;

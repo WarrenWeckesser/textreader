@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "sizes.h"
 #include "constants.h"

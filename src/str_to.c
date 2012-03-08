@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 
 #define ERROR_OK             0
 #define ERROR_NO_DIGITS      1
@@ -98,7 +99,6 @@ int64_t str_to_int64(const char *p_item, int64_t int_min, int64_t int_max, int *
 uint64_t str_to_uint64(const char *p_item, uint64_t uint_max, int *error)
 {
     const char *p = (const char *) p_item;
-    int isneg = 0;
     uint64_t number = 0;
     int d;
 
